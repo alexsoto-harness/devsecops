@@ -1,4 +1,4 @@
-name: <+service.name>
+name: <+service.name.replace(" ", "")>
 replicas: 1
 image: <+artifact.image>
 dockercfg: <+artifact.imagePullSecret>

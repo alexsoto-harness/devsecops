@@ -1,0 +1,274 @@
+pipeline:
+  projectIdentifier: Reference_Architecture
+  orgIdentifier: demo
+  tags:
+    owner: soto
+  properties:
+    ci:
+      codebase:
+        connectorRef: sotogh
+        repoName: devsecops
+        build: <+input>
+        sparseCheckout: []
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Test
+                  name: Test Intelligence
+                  identifier: Test_Intelligence
+                  spec:
+                    shell: Sh
+                    command: |-
+                      cd ./python-tests
+                      pytest
+                    intelligenceMode: true
+                  when:
+                    stageStatus: Success
+                    condition: "false"
+              - step:
+                  type: Run
+                  name: Compile
+                  identifier: Compile
+                  spec:
+                    connectorRef: account.DockerHub
+                    image: node:18-alpine
+                    shell: Sh
+                    command: |-
+                      # Verify Node.js version (should be 18.x from container)
+                      node --version
+                      npm --version
+
+                      # Build the application
+                      cd frontend-app/harness-webapp
+                      npm install
+                      npm install -g @angular/cli
+
+                      mkdir -p ./src/environments
+                      echo "export const environment = {
+                        production: true,
+                        defaultApiUrl: "'"https://api.devsecops.harness-demo.site"'",
+                        defaultSDKKey: "'"<+variable.sdk>"'"
+                      };" > ./src/environments/environment.prod.ts
+
+
+                      echo "export const environment = {
+                        production: true,
+                        defaultApiUrl: "'"https://api.devsecops.harness-demo.site"'",
+                        defaultSDKKey: "'"<+variable.sdk>"'"
+                      };" > ./src/environments/environment.ts
+
+                      npm run build
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsFailure
+              - step:
+                  type: OsvScanner
+                  name: OsvScanner
+                  identifier: OsvScanner_1
+                  spec:
+                    mode: orchestration
+                    config: default
+                    target:
+                      type: repository
+                      detection: auto
+                    advanced:
+                      log:
+                        level: info
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: BuildAndPushDockerRegistry_1
+                  identifier: BuildAndPushDockerRegistry_1
+                  spec:
+                    repo: harness/frontend
+                    tags:
+                      - 0.0.<+pipeline.sequenceId>
+                      - latest
+                    caching: true
+                    dockerfile: /harness/frontend-app/harness-webapp/Dockerfile
+                    context: /harness/frontend-app/harness-webapp
+                    registryRef: soto-har
+              - parallel:
+                  - step:
+                      type: Background
+                      name: dind
+                      identifier: dind
+                      spec:
+                        connectorRef: account.harnessImage
+                        image: docker:dind
+                        shell: Sh
+                  - step:
+                      type: AquaTrivy
+                      name: Aqua Trivy
+                      identifier: Aqua_Trivy
+                      spec:
+                        mode: orchestration
+                        config: default
+                        target:
+                          type: container
+                          detection: auto
+                        advanced:
+                          log:
+                            level: info
+                        privileged: true
+                        image:
+                          type: docker_v2
+                          tag: 0.0.<+pipeline.sequenceId>
+                          name: seworkshop/devsecops-demo
+                        sbom:
+                          format: spdx-json
+                      when:
+                        stageStatus: Success
+                        condition: "FALSE"
+        when:
+          pipelineStatus: Success
+    - stage:
+        name: Frontend - Deployment
+        identifier: Frontend_Deployment
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: org.DevSecOps_Frontend
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources: <+input>
+          environment:
+            environmentRef: org.dev
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: devsecops
+          execution:
+            steps:
+              - step:
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  type: K8sRollingDeploy
+                  timeout: 3m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps:
+              - step:
+                  name: Rollback Rollout Deployment
+                  identifier: rollbackRolloutDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+        when:
+          pipelineStatus: Success
+    - parallel:
+        - stage:
+            name: Backend - Deployment
+            identifier: Backend_Deployment
+            description: ""
+            type: Deployment
+            spec:
+              deploymentType: Kubernetes
+              service:
+                serviceRef: org.DevSecOps_Backend
+                serviceInputs:
+                  serviceDefinition:
+                    type: Kubernetes
+                    spec:
+                      artifacts:
+                        primary:
+                          primaryArtifactRef: backend
+              environment:
+                useFromStage:
+                  stage: Frontend_Deployment
+              execution:
+                steps:
+                  - stepGroup:
+                      name: Canary Deployment
+                      identifier: canaryDeployment
+                      steps:
+                        - step:
+                            name: Canary Deployment
+                            identifier: canaryDeployment
+                            type: K8sCanaryDeploy
+                            timeout: 10m
+                            spec:
+                              instanceSelection:
+                                type: Count
+                                spec:
+                                  count: 1
+                              skipDryRun: false
+                        - step:
+                            name: Canary Delete
+                            identifier: canaryDelete
+                            type: K8sCanaryDelete
+                            timeout: 10m
+                            spec: {}
+                  - stepGroup:
+                      name: Primary Deployment
+                      identifier: primaryDeployment
+                      steps:
+                        - step:
+                            name: Rolling Deployment
+                            identifier: rollingDeployment
+                            type: K8sRollingDeploy
+                            timeout: 10m
+                            spec:
+                              skipDryRun: false
+                rollbackSteps:
+                  - step:
+                      name: Canary Delete
+                      identifier: rollbackCanaryDelete
+                      type: K8sCanaryDelete
+                      timeout: 10m
+                      spec: {}
+                  - step:
+                      name: Rolling Rollback
+                      identifier: rollingRollback
+                      type: K8sRollingRollback
+                      timeout: 10m
+                      spec: {}
+            tags: {}
+            failureStrategies:
+              - onFailure:
+                  errors:
+                    - AllErrors
+                  action:
+                    type: StageRollback
+        - stage:
+            name: DAST Scans
+            identifier: DAST_Scans
+            template:
+              templateRef: org.DAST_Scans
+              versionLabel: "2.0"
+  identifier: BNS_Build_and_Deploy
+  description: This pipeline showcases build failures in both the CI and CD stage
+  name: BNS - Build and Deploy

@@ -1,0 +1,32 @@
+inputSet:
+  identifier: BNS_Build_and_Deploy_default
+  name: BNS Build and Deploy - Default Input Set
+  orgIdentifier: demo
+  projectIdentifier: Reference_Architecture
+  pipeline:
+    identifier: BNS_Build_and_Deploy
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: main
+    stages:
+      - stage:
+          identifier: Frontend_Deployment
+          type: Deployment
+          spec:
+            service:
+              serviceInputs:
+                serviceDefinition:
+                  type: Kubernetes
+                  spec:
+                    artifacts:
+                      primary:
+                        primaryArtifactRef: frontend
+                        sources:
+                          - identifier: frontend
+                            type: DockerRegistry
+                            spec:
+                              tag: latest

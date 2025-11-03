@@ -8,7 +8,10 @@ pipeline:
       codebase:
         connectorRef: sotogh
         repoName: devsecops
-        build: <+input>
+        build:
+          spec:
+            branch: main
+          type: branch 
         sparseCheckout: []
   stages:
     - stage:
@@ -155,8 +158,7 @@ pipeline:
                 spec:
                   artifacts:
                     primary:
-                      primaryArtifactRef: <+input>
-                      sources: <+input>
+                      primaryArtifactRef: frontend
           environment:
             environmentRef: org.dev
             deployToAll: false

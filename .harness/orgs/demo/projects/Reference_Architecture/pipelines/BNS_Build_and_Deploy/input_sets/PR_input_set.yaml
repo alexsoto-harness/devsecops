@@ -1,0 +1,14 @@
+inputSet:
+  name: PR_input_set
+  identifier: PR_input_set
+  orgIdentifier: demo
+  projectIdentifier: Reference_Architecture
+  pipeline:
+    identifier: BNS_Build_and_Deploy
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>

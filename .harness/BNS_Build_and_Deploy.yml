@@ -8,10 +8,7 @@ pipeline:
       codebase:
         connectorRef: sotogh
         repoName: devsecops
-        build:
-          spec:
-            branch: main
-          type: branch 
+        build: <+input>
         sparseCheckout: []
   stages:
     - stage:

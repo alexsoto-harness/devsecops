@@ -1,6 +1,6 @@
 # DevSecOps Demo Application
 
-A full-stack banking application demonstrating modern DevSecOps practices with Harness CI/CD, featuring comprehensive security scanning, automated testing, and Kubernetes deployment.
+A full-stack banking application demonstrating modern DevSecOps practices with Harness CI/CD, featuring comprehensive security scanning, automated testing, and Kubernetes deployment
 
 ## 🏗️ Architecture
 

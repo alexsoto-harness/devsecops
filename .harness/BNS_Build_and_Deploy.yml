@@ -137,7 +137,7 @@ pipeline:
                           format: spdx-json
                       when:
                         stageStatus: Success
-                        condition: "FALSE"
+                        condition: "false"
         when:
           pipelineStatus: Success
     - stage:

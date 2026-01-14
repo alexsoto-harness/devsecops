@@ -270,4 +270,4 @@ pipeline:
               versionLabel: "2.0"
   identifier: BNS_Build_and_Deploy
   description: This pipeline showcases build failures in both the CI and CD stage
-  name: BMO - Build and Deploy
+  name: Soto - Build and Deploy
